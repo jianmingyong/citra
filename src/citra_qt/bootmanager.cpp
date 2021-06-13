@@ -325,6 +325,7 @@ void GRenderWindow::mouseReleaseEvent(QMouseEvent* event) {
     else if (event->button() == Qt::RightButton)
         InputCommon::GetMotionEmu()->EndTilt();
     emit MouseActivity();
+    this->setFocus();
 }
 
 void GRenderWindow::TouchBeginEvent(const QTouchEvent* event) {
