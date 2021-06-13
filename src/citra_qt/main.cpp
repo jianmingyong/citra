@@ -596,6 +596,14 @@ void GMainWindow::InitializeHotkeys() {
             &QShortcut::activated, ui->action_Load_from_Newest_Slot, &QAction::trigger);
     connect(hotkey_registry.GetHotkey(main_window, QStringLiteral("Save to Oldest Slot"), this),
             &QShortcut::activated, ui->action_Save_to_Oldest_Slot, &QAction::trigger);
+    
+    actions_load_state[0]->setShortcut(QKeySequence(Qt::Key_F1));
+    actions_load_state[1]->setShortcut(QKeySequence(Qt::Key_F2));
+    actions_load_state[2]->setShortcut(QKeySequence(Qt::Key_F3));
+
+    actions_save_state[0]->setShortcut(QKeySequence(Qt::SHIFT + Qt::Key_F1));
+    actions_save_state[1]->setShortcut(QKeySequence(Qt::SHIFT + Qt::Key_F2));
+    actions_save_state[2]->setShortcut(QKeySequence(Qt::SHIFT + Qt::Key_F3));
 }
 
 void GMainWindow::ShowUpdaterWidgets() {
