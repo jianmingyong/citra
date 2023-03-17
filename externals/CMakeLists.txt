@@ -23,31 +23,54 @@ target_link_libraries(boost_serialization PUBLIC boost)
 
 # Add additional boost libs here; remember to ALIAS them in the root CMakeLists!
 
-# Catch
-add_library(catch-single-include INTERFACE)
-target_include_directories(catch-single-include INTERFACE catch/single_include)
+# Catch2
+set(CATCH_INSTALL_DOCS OFF)
+set(CATCH_INSTALL_EXTRAS OFF)
+add_subdirectory(catch2)
 
 # Crypto++
-add_subdirectory(cryptopp)
+set(CRYPTOPP_BUILD_DOCUMENTATION OFF)
+set(CRYPTOPP_BUILD_TESTING OFF)
+set(CRYPTOPP_INSTALL OFF)
+set(CRYPTOPP_SOURCES "${CMAKE_SOURCE_DIR}/externals/cryptopp")
+add_subdirectory(cryptopp-cmake)
+
+# HACK: Mismatch between compilation of CryptoPP and headers used in Citra can cause runtime issues.
+# Pull out the compile definitions from CryptoPP and apply them to Citra as well to fix this.
+# See: https://github.com/weidai11/cryptopp/issues/1191
+get_source_file_property(CRYPTOPP_COMPILE_DEFINITIONS ${CRYPTOPP_SOURCES}/cryptlib.cpp TARGET_DIRECTORY cryptopp COMPILE_DEFINITIONS)
+set(CRYPTOPP_COMPILE_DEFINITIONS ${CRYPTOPP_COMPILE_DEFINITIONS} PARENT_SCOPE)
+
+# HACK: The logic to set up the base include directory for CryptoPP does not work with Android SDK CMake 3.22.1.
+# Until there is a fixed version available, this code will detect and add in the proper include if it does not exist.
+if(ANDROID)
+    message(STATUS "Applying CryptoPP include fix.")
+    get_target_property(CRYPTOPP_INCLUDES cryptopp INTERFACE_INCLUDE_DIRECTORIES)
+    foreach(CRYPTOPP_INCLUDE ${CRYPTOPP_INCLUDES})
+        if("${CRYPTOPP_INCLUDE}" MATCHES "\\$<BUILD_INTERFACE:(.*)/cryptopp>")
+            message(STATUS "Fixed include path: ${CMAKE_MATCH_1}")
+            target_include_directories(cryptopp PUBLIC $<BUILD_INTERFACE:${CMAKE_MATCH_1}>)
+            break()
+        endif()
+    endforeach()
+endif()
+
+# fmt and Xbyak need to be added before dynarmic
+# libfmt
+option(FMT_INSTALL "" ON)
+add_subdirectory(fmt)
 
 # Xbyak
-if (ARCHITECTURE_x86_64)
-    add_library(xbyak INTERFACE)
-    target_include_directories(xbyak SYSTEM INTERFACE ./xbyak/xbyak)
-    target_compile_definitions(xbyak INTERFACE XBYAK_NO_OP_NAMES)
+if ("x86_64" IN_LIST ARCHITECTURE)
+    add_subdirectory(xbyak)
 endif()
 
 # Dynarmic
-if (ARCHITECTURE_x86_64 OR ARCHITECTURE_ARM64)
+if ("x86_64" IN_LIST ARCHITECTURE OR "arm64" IN_LIST ARCHITECTURE)
     set(DYNARMIC_TESTS OFF)
-    set(DYNARMIC_NO_BUNDLED_FMT ON)
     set(DYNARMIC_FRONTENDS "A32")
     add_subdirectory(dynarmic)
 endif()
-
-# libfmt
-add_subdirectory(fmt)
-add_library(fmt::fmt ALIAS fmt)
 
 # getopt
 if (MSVC)
@@ -79,7 +102,15 @@ target_include_directories(SoundTouch INTERFACE ./soundtouch/include)
 # Teakra
 add_subdirectory(teakra EXCLUDE_FROM_ALL)
 
+# SDL2
+if (ENABLE_SDL2 AND NOT USE_SYSTEM_SDL2)
+    add_subdirectory(sdl2)
+endif()
+
 # Zstandard
+set(ZSTD_LEGACY_SUPPORT OFF)
+set(ZSTD_BUILD_PROGRAMS OFF)
+set(ZSTD_BUILD_SHARED OFF)
 add_subdirectory(zstd/build/cmake EXCLUDE_FROM_ALL)
 target_include_directories(libzstd_static INTERFACE $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/externals/zstd/lib>)
 

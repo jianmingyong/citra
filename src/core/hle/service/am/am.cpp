@@ -9,6 +9,7 @@
 #include <cryptopp/aes.h>
 #include <cryptopp/modes.h>
 #include <fmt/format.h>
+#include "common/alignment.h"
 #include "common/common_paths.h"
 #include "common/file_util.h"
 #include "common/logging/log.h"
@@ -17,12 +18,9 @@
 #include "core/file_sys/errors.h"
 #include "core/file_sys/ncch_container.h"
 #include "core/file_sys/title_metadata.h"
-#include "core/hle/ipc.h"
 #include "core/hle/ipc_helpers.h"
-#include "core/hle/kernel/client_port.h"
 #include "core/hle/kernel/client_session.h"
 #include "core/hle/kernel/errors.h"
-#include "core/hle/kernel/handle_table.h"
 #include "core/hle/kernel/server_session.h"
 #include "core/hle/kernel/session.h"
 #include "core/hle/service/am/am.h"
@@ -34,6 +32,9 @@
 #include "core/hle/service/fs/fs_user.h"
 #include "core/loader/loader.h"
 #include "core/loader/smdh.h"
+#ifdef ENABLE_WEB_SERVICE
+#include "web_service/nus_download.h"
+#endif
 
 namespace Service::AM {
 
@@ -141,6 +142,8 @@ ResultCode CIAFile::WriteTitleMetadata() {
             decryption_state->content[i].SetKeyWithIV(title_key->data(), title_key->size(),
                                                       ctr.data());
         }
+    } else {
+        LOG_ERROR(Service_AM, "Can't get title key from ticket");
     }
 
     install_state = CIAInstallState::TMDLoaded;
@@ -183,6 +186,11 @@ ResultVal<std::size_t> CIAFile::WriteContentData(u64 offset, std::size_t length,
                                  buffer + (range_min - offset) + available_to_write);
 
             if ((tmd.GetContentTypeByIndex(i) & FileSys::TMDContentTypeFlag::Encrypted) != 0) {
+                if (decryption_state->content.size() <= i) {
+                    // TODO: There is probably no correct error to return here. What error should be
+                    // returned?
+                    return FileSys::ERROR_INSUFFICIENT_SPACE;
+                }
                 decryption_state->content[i].ProcessData(temp.data(), temp.data(), temp.size());
             }
 
@@ -238,7 +246,7 @@ ResultVal<std::size_t> CIAFile::Write(u64 offset, std::size_t length, bool flush
         std::size_t buf_offset = buf_loaded - offset;
         std::size_t buf_copy_size =
             std::min(length, static_cast<std::size_t>(container.GetContentOffset() - offset)) -
-            buf_loaded;
+            buf_offset;
         std::size_t buf_max_size = std::min(offset + length, container.GetContentOffset());
         data.resize(buf_max_size);
         memcpy(data.data() + copy_offset, buffer + buf_offset, buf_copy_size);
@@ -318,7 +326,14 @@ bool CIAFile::Close() const {
             if (abort)
                 break;
 
-            FileUtil::Delete(GetTitleContentPath(media_type, old_tmd.GetTitleID(), old_index));
+            // If the file to delete is the current launched rom, signal the system to delete
+            // the current rom instead of deleting it now, once all the handles to the file
+            // are closed.
+            std::string to_delete =
+                GetTitleContentPath(media_type, old_tmd.GetTitleID(), old_index);
+            if (!(Core::System::GetInstance().IsPoweredOn() &&
+                  Core::System::GetInstance().SetSelfDelete(to_delete)))
+                FileUtil::Delete(to_delete);
         }
 
         FileUtil::Delete(old_tmd_path);
@@ -412,6 +427,99 @@ InstallStatus InstallCIA(const std::string& path,
 
     LOG_ERROR(Service_AM, "CIA file {} is invalid!", path);
     return InstallStatus::ErrorInvalid;
+}
+
+InstallStatus InstallFromNus(u64 title_id, int version) {
+#ifdef ENABLE_WEB_SERVICE
+    LOG_DEBUG(Service_AM, "Downloading {:X}", title_id);
+
+    CIAFile install_file{GetTitleMediaType(title_id)};
+
+    std::string path = fmt::format("/ccs/download/{:016X}/tmd", title_id);
+    if (version != -1) {
+        path += fmt::format(".{}", version);
+    }
+    auto tmd_response = WebService::NUS::Download(path);
+    if (!tmd_response) {
+        LOG_ERROR(Service_AM, "Failed to download tmd for {:016X}", title_id);
+        return InstallStatus::ErrorFileNotFound;
+    }
+    FileSys::TitleMetadata tmd;
+    tmd.Load(*tmd_response);
+
+    path = fmt::format("/ccs/download/{:016X}/cetk", title_id);
+    auto cetk_response = WebService::NUS::Download(path);
+    if (!cetk_response) {
+        LOG_ERROR(Service_AM, "Failed to download cetk for {:016X}", title_id);
+        return InstallStatus::ErrorFileNotFound;
+    }
+
+    std::vector<u8> content;
+    const auto content_count = tmd.GetContentCount();
+    for (std::size_t i = 0; i < content_count; ++i) {
+        const std::string filename = fmt::format("{:08x}", tmd.GetContentIDByIndex(i));
+        path = fmt::format("/ccs/download/{:016X}/{}", title_id, filename);
+        const auto temp_response = WebService::NUS::Download(path);
+        if (!temp_response) {
+            LOG_ERROR(Service_AM, "Failed to download content for {:016X}", title_id);
+            return InstallStatus::ErrorFileNotFound;
+        }
+        content.insert(content.end(), temp_response->begin(), temp_response->end());
+    }
+
+    FileSys::CIAContainer::Header fake_header{
+        .header_size = sizeof(FileSys::CIAContainer::Header),
+        .type = 0,
+        .version = 0,
+        .cert_size = 0,
+        .tik_size = static_cast<u32_le>(cetk_response->size()),
+        .tmd_size = static_cast<u32_le>(tmd_response->size()),
+        .meta_size = 0,
+    };
+    for (u16 i = 0; i < content_count; ++i) {
+        fake_header.SetContentPresent(i);
+    }
+    std::vector<u8> header_data(sizeof(fake_header));
+    std::memcpy(header_data.data(), &fake_header, sizeof(fake_header));
+
+    std::size_t current_offset = 0;
+    const auto write_to_cia_file_aligned = [&install_file, &current_offset](std::vector<u8>& data) {
+        const u64 offset =
+            Common::AlignUp(current_offset + data.size(), FileSys::CIA_SECTION_ALIGNMENT);
+        data.resize(offset - current_offset, 0);
+        const auto result = install_file.Write(current_offset, data.size(), true, data.data());
+        if (result.Failed()) {
+            LOG_ERROR(Service_AM, "CIA file installation aborted with error code {:08x}",
+                      result.Code().raw);
+            return InstallStatus::ErrorAborted;
+        }
+        current_offset += data.size();
+        return InstallStatus::Success;
+    };
+
+    auto result = write_to_cia_file_aligned(header_data);
+    if (result != InstallStatus::Success) {
+        return result;
+    }
+
+    result = write_to_cia_file_aligned(*cetk_response);
+    if (result != InstallStatus::Success) {
+        return result;
+    }
+
+    result = write_to_cia_file_aligned(*tmd_response);
+    if (result != InstallStatus::Success) {
+        return result;
+    }
+
+    result = write_to_cia_file_aligned(content);
+    if (result != InstallStatus::Success) {
+        return result;
+    }
+    return InstallStatus::Success;
+#else
+    return InstallStatus::ErrorFileNotFound;
+#endif
 }
 
 Service::FS::MediaType GetTitleMediaType(u64 titleId) {
@@ -610,7 +718,6 @@ void Module::Interface::FindDLCContentInfos(Kernel::HLERequestContext& ctx) {
 
     std::string tmd_path = GetTitleMetadataPath(media_type, title_id);
 
-    u32 content_read = 0;
     FileSys::TitleMetadata tmd;
     if (tmd.Load(tmd_path) == Loader::ResultStatus::Success) {
         std::size_t write_offset = 0;
@@ -642,7 +749,6 @@ void Module::Interface::FindDLCContentInfos(Kernel::HLERequestContext& ctx) {
 
             content_info_out.Write(&content_info, write_offset, sizeof(ContentInfo));
             write_offset += sizeof(ContentInfo);
-            content_read++;
         }
     }
 
@@ -981,7 +1087,11 @@ void Module::Interface::DeleteTicket(Kernel::HLERequestContext& ctx) {
 
 void Module::Interface::GetNumTickets(Kernel::HLERequestContext& ctx) {
     IPC::RequestParser rp(ctx, 0x0008, 0, 0); // 0x00080000
+
     u32 ticket_count = 0;
+    for (const auto& title_list : am->am_title_list) {
+        ticket_count += static_cast<u32>(title_list.size());
+    }
 
     IPC::RequestBuilder rb = rp.MakeBuilder(2, 0);
     rb.Push(RESULT_SUCCESS);
@@ -995,9 +1105,18 @@ void Module::Interface::GetTicketList(Kernel::HLERequestContext& ctx) {
     u32 ticket_index = rp.Pop<u32>();
     auto& ticket_tids_out = rp.PopMappedBuffer();
 
+    u32 tickets_written = 0;
+    for (const auto& title_list : am->am_title_list) {
+        const auto tickets_to_write =
+            std::min(static_cast<u32>(title_list.size()), ticket_list_count - tickets_written);
+        ticket_tids_out.Write(title_list.data(), tickets_written * sizeof(u64),
+                              tickets_to_write * sizeof(u64));
+        tickets_written += tickets_to_write;
+    }
+
     IPC::RequestBuilder rb = rp.MakeBuilder(2, 2);
     rb.Push(RESULT_SUCCESS);
-    rb.Push(ticket_list_count);
+    rb.Push(tickets_written);
     rb.PushMappedBuffer(ticket_tids_out);
     LOG_WARNING(Service_AM, "(STUBBED) ticket_list_count=0x{:08x}, ticket_index=0x{:08x}",
                 ticket_list_count, ticket_index);
@@ -1021,6 +1140,7 @@ void Module::Interface::CheckContentRights(Kernel::HLERequestContext& ctx) {
 
     // TODO(shinyquagsire23): Read tickets for this instead?
     bool has_rights =
+        FileUtil::Exists(GetTitleContentPath(Service::FS::MediaType::NAND, tid, content_index)) ||
         FileUtil::Exists(GetTitleContentPath(Service::FS::MediaType::SDMC, tid, content_index));
 
     IPC::RequestBuilder rb = rp.MakeBuilder(2, 0);

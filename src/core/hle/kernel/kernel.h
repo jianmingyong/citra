@@ -82,6 +82,20 @@ enum class MemoryRegion : u16 {
     BASE = 3,
 };
 
+union CoreVersion {
+    CoreVersion(u32 version) : raw(version) {}
+    CoreVersion(u32 major_ver, u32 minor_ver, u32 revision_ver) {
+        revision.Assign(revision_ver);
+        minor.Assign(minor_ver);
+        major.Assign(major_ver);
+    }
+
+    u32 raw;
+    BitField<8, 8, u32> revision;
+    BitField<16, 8, u32> minor;
+    BitField<24, 8, u32> major;
+};
+
 class KernelSystem {
 public:
     explicit KernelSystem(Memory::MemorySystem& memory, Core::Timing& timing,
@@ -118,6 +132,12 @@ public:
     std::shared_ptr<CodeSet> CreateCodeSet(std::string name, u64 program_id);
 
     std::shared_ptr<Process> CreateProcess(std::shared_ptr<CodeSet> code_set);
+
+    /**
+     * Removes a process from the kernel process list
+     * @param process Process to remove
+     */
+    void RemoveProcess(std::shared_ptr<Process> process);
 
     /**
      * Creates and returns a new thread. The new thread is immediately scheduled
@@ -209,6 +229,10 @@ public:
 
     /// Retrieves a process from the current list of processes.
     std::shared_ptr<Process> GetProcessById(u32 process_id) const;
+
+    const std::vector<std::shared_ptr<Process>>& GetProcessList() const {
+        return process_list;
+    }
 
     std::shared_ptr<Process> GetCurrentProcess() const;
     void SetCurrentProcess(std::shared_ptr<Process> process);

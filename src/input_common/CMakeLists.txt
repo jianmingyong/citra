@@ -11,6 +11,7 @@ add_library(input_common STATIC
     main.h
     motion_emu.cpp
     motion_emu.h
+    precompiled_headers.h
     touch_from_button.cpp
     touch_from_button.h
     sdl/sdl.cpp
@@ -23,12 +24,12 @@ add_library(input_common STATIC
     udp/udp.h
 )
 
-if(SDL2_FOUND)
+if(ENABLE_SDL2)
     target_sources(input_common PRIVATE
         sdl/sdl_impl.cpp
         sdl/sdl_impl.h
     )
-    target_link_libraries(input_common PRIVATE SDL2)
+    target_link_libraries(input_common PRIVATE SDL2::SDL2)
     target_compile_definitions(input_common PRIVATE HAVE_SDL2)
 endif()
 
@@ -36,3 +37,8 @@ create_target_directory_groups(input_common)
 target_link_libraries(input_common PUBLIC core PRIVATE common ${Boost_LIBRARIES})
 target_include_directories(input_common PRIVATE ${LIBUSB_INCLUDE_DIR})
 target_link_libraries(input_common PUBLIC ${LIBUSB_LIBRARIES})
+set_target_properties(input_common PROPERTIES INTERPROCEDURAL_OPTIMIZATION ${ENABLE_LTO})
+
+if (CITRA_USE_PRECOMPILED_HEADERS)
+    target_precompile_headers(input_common PRIVATE precompiled_headers.h)
+endif()

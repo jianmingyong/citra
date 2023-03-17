@@ -12,24 +12,26 @@ import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.SubMenu;
 import android.view.View;
 import android.widget.CheckBox;
-import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.PopupMenu;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.fragment.app.FragmentActivity;
 
 import org.citra.citra_emu.CitraApplication;
 import org.citra.citra_emu.NativeLibrary;
 import org.citra.citra_emu.R;
+import org.citra.citra_emu.features.cheats.ui.CheatsActivity;
 import org.citra.citra_emu.features.settings.model.view.InputBindingSetting;
 import org.citra.citra_emu.features.settings.ui.SettingsActivity;
 import org.citra.citra_emu.features.settings.utils.SettingsFile;
@@ -41,6 +43,7 @@ import org.citra.citra_emu.utils.EmulationMenuSettings;
 import org.citra.citra_emu.utils.FileBrowserHelper;
 import org.citra.citra_emu.utils.FileUtil;
 import org.citra.citra_emu.utils.ForegroundService;
+import org.citra.citra_emu.utils.ThemeUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -51,6 +54,9 @@ import java.util.List;
 import static android.Manifest.permission.CAMERA;
 import static android.Manifest.permission.RECORD_AUDIO;
 import static java.lang.annotation.RetentionPolicy.SOURCE;
+
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.slider.Slider;
 
 public final class EmulationActivity extends AppCompatActivity {
     public static final String EXTRA_SELECTED_GAME = "SelectedGame";
@@ -72,6 +78,8 @@ public final class EmulationActivity extends AppCompatActivity {
     public static final int MENU_ACTION_REMOVE_AMIIBO = 14;
     public static final int MENU_ACTION_JOYSTICK_REL_CENTER = 15;
     public static final int MENU_ACTION_DPAD_SLIDE_ENABLE = 16;
+    public static final int MENU_ACTION_OPEN_CHEATS = 17;
+    public static final int MENU_ACTION_CLOSE_GAME = 18;
 
     public static final int REQUEST_SELECT_AMIIBO = 2;
     private static final int EMULATION_RUNNING_NOTIFICATION = 0x1000;
@@ -110,6 +118,10 @@ public final class EmulationActivity extends AppCompatActivity {
                 EmulationActivity.MENU_ACTION_JOYSTICK_REL_CENTER);
         buttonsActionsMap.append(R.id.menu_emulation_dpad_slide_enable,
                 EmulationActivity.MENU_ACTION_DPAD_SLIDE_ENABLE);
+        buttonsActionsMap
+                .append(R.id.menu_emulation_open_cheats, EmulationActivity.MENU_ACTION_OPEN_CHEATS);
+        buttonsActionsMap
+                .append(R.id.menu_emulation_close_game, EmulationActivity.MENU_ACTION_CLOSE_GAME);
     }
 
     private View mDecorView;
@@ -141,6 +153,8 @@ public final class EmulationActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        ThemeUtil.applyTheme(this);
+
         super.onCreate(savedInstanceState);
 
         if (savedInstanceState == null) {
@@ -168,8 +182,6 @@ public final class EmulationActivity extends AppCompatActivity {
         });
         // Set these options now so that the SurfaceView the game renders into is the right size.
         enableFullscreenImmersive();
-
-        setTheme(R.style.CitraEmulationBase);
 
         setContentView(R.layout.activity_emulation);
 
@@ -219,21 +231,12 @@ public final class EmulationActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
-        NativeLibrary.PauseEmulation();
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.emulation_close_game)
-                .setMessage(R.string.emulation_close_game_message)
-                .setPositiveButton(android.R.string.yes, (dialogInterface, i) ->
-                {
-                    mEmulationFragment.stopEmulation();
-                    finish();
-                })
-                .setNegativeButton(android.R.string.cancel, (dialogInterface, i) ->
-                    NativeLibrary.UnPauseEmulation())
-                .setOnCancelListener(dialogInterface ->
-                    NativeLibrary.UnPauseEmulation())
-                .create()
-                .show();
+        View anchor = findViewById(R.id.menu_anchor);
+        PopupMenu popupMenu = new PopupMenu(this, anchor);
+        onCreateOptionsMenu(popupMenu.getMenu(), popupMenu.getMenuInflater());
+        updateSavestateMenuOptions(popupMenu.getMenu());
+        popupMenu.setOnMenuItemClickListener(this::onOptionsItemSelected);
+        popupMenu.show();
     }
 
     @Override
@@ -242,7 +245,7 @@ public final class EmulationActivity extends AppCompatActivity {
             case NativeLibrary.REQUEST_CODE_NATIVE_CAMERA:
                 if (grantResults[0] != PackageManager.PERMISSION_GRANTED &&
                         shouldShowRequestPermissionRationale(CAMERA)) {
-                    new AlertDialog.Builder(this)
+                    new MaterialAlertDialogBuilder(this)
                             .setTitle(R.string.camera)
                             .setMessage(R.string.camera_permission_needed)
                             .setPositiveButton(android.R.string.ok, null)
@@ -253,7 +256,7 @@ public final class EmulationActivity extends AppCompatActivity {
             case NativeLibrary.REQUEST_CODE_NATIVE_MIC:
                 if (grantResults[0] != PackageManager.PERMISSION_GRANTED &&
                         shouldShowRequestPermissionRationale(RECORD_AUDIO)) {
-                    new AlertDialog.Builder(this)
+                    new MaterialAlertDialogBuilder(this)
                             .setTitle(R.string.microphone)
                             .setMessage(R.string.microphone_permission_needed)
                             .setPositiveButton(android.R.string.ok, null)
@@ -265,6 +268,10 @@ public final class EmulationActivity extends AppCompatActivity {
                 super.onRequestPermissionsResult(requestCode, permissions, grantResults);
                 break;
         }
+    }
+
+    public void onEmulationStarted() {
+        Toast.makeText(this, getString(R.string.emulation_menu_help), Toast.LENGTH_LONG).show();
     }
 
     private void enableFullscreenImmersive() {
@@ -281,7 +288,12 @@ public final class EmulationActivity extends AppCompatActivity {
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_emulation, menu);
+        onCreateOptionsMenu(menu, getMenuInflater());
+        return true;
+    }
+
+    private void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+        inflater.inflate(R.menu.menu_emulation, menu);
 
         int layoutOptionMenuItem = R.id.menu_screen_layout_landscape;
         switch (EmulationMenuSettings.getLandscapeScreenLayout()) {
@@ -302,8 +314,6 @@ public final class EmulationActivity extends AppCompatActivity {
         menu.findItem(R.id.menu_emulation_show_fps).setChecked(EmulationMenuSettings.getShowFps());
         menu.findItem(R.id.menu_emulation_swap_screens).setChecked(EmulationMenuSettings.getSwapScreens());
         menu.findItem(R.id.menu_emulation_show_overlay).setChecked(EmulationMenuSettings.getShowOverlay());
-
-        return true;
     }
 
     private void DisplaySavestateWarning() {
@@ -316,7 +326,7 @@ public final class EmulationActivity extends AppCompatActivity {
         View view = inflater.inflate(R.layout.dialog_checkbox, null);
         CheckBox checkBox = view.findViewById(R.id.checkBox);
 
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle(R.string.savestate_warning_title)
                 .setMessage(R.string.savestate_warning_message)
                 .setView(view)
@@ -329,12 +339,16 @@ public final class EmulationActivity extends AppCompatActivity {
     @Override
     public boolean onPrepareOptionsMenu(Menu menu) {
         super.onPrepareOptionsMenu(menu);
+        updateSavestateMenuOptions(menu);
+        return true;
+    }
 
+    private void updateSavestateMenuOptions(Menu menu) {
         final NativeLibrary.SavestateInfo[] savestates = NativeLibrary.GetSavestateInfo();
         if (savestates == null) {
             menu.findItem(R.id.menu_emulation_save_state).setVisible(false);
             menu.findItem(R.id.menu_emulation_load_state).setVisible(false);
-            return true;
+            return;
         }
         menu.findItem(R.id.menu_emulation_save_state).setVisible(true);
         menu.findItem(R.id.menu_emulation_load_state).setVisible(true);
@@ -363,7 +377,6 @@ public final class EmulationActivity extends AppCompatActivity {
             saveStateMenu.getItem(info.slot - 1).setTitle(text);
             loadStateMenu.getItem(info.slot - 1).setTitle(text).setEnabled(true);
         }
-        return true;
     }
 
     @SuppressWarnings("WrongConstant")
@@ -453,8 +466,8 @@ public final class EmulationActivity extends AppCompatActivity {
 
             case MENU_ACTION_LOAD_AMIIBO:
                 FileBrowserHelper.openFilePicker(this, REQUEST_SELECT_AMIIBO,
-                                                 R.string.select_amiibo,
-                                                 Collections.singletonList("bin"), false);
+                        R.string.select_amiibo,
+                        Collections.singletonList("bin"), false);
                 break;
 
             case MENU_ACTION_REMOVE_AMIIBO:
@@ -466,10 +479,30 @@ public final class EmulationActivity extends AppCompatActivity {
                 EmulationMenuSettings.setJoystickRelCenter(isJoystickRelCenterEnabled);
                 item.setChecked(isJoystickRelCenterEnabled);
                 break;
+
             case MENU_ACTION_DPAD_SLIDE_ENABLE:
                 final boolean isDpadSlideEnabled = !EmulationMenuSettings.getDpadSlideEnable();
                 EmulationMenuSettings.setDpadSlideEnable(isDpadSlideEnabled);
                 item.setChecked(isDpadSlideEnabled);
+                break;
+
+            case MENU_ACTION_OPEN_CHEATS:
+                CheatsActivity.launch(this);
+                break;
+
+            case MENU_ACTION_CLOSE_GAME:
+                NativeLibrary.PauseEmulation();
+                new MaterialAlertDialogBuilder(this)
+                        .setTitle(R.string.emulation_close_game)
+                        .setMessage(R.string.emulation_close_game_message)
+                        .setPositiveButton(android.R.string.yes, (dialogInterface, i) ->
+                        {
+                            mEmulationFragment.stopEmulation();
+                            finish();
+                        })
+                        .setNegativeButton(android.R.string.cancel, (dialogInterface, i) -> NativeLibrary.UnPauseEmulation())
+                        .setOnCancelListener(dialogInterface -> NativeLibrary.UnPauseEmulation())
+                        .show();
                 break;
         }
 
@@ -555,11 +588,10 @@ public final class EmulationActivity extends AppCompatActivity {
         }
 
         if (!success) {
-            new AlertDialog.Builder(this)
+            new MaterialAlertDialogBuilder(this)
                     .setTitle(R.string.amiibo_load_error)
                     .setMessage(R.string.amiibo_load_error_message)
                     .setPositiveButton(android.R.string.ok, null)
-                    .create()
                     .show();
         }
     }
@@ -571,8 +603,6 @@ public final class EmulationActivity extends AppCompatActivity {
     private void toggleControls() {
         final SharedPreferences.Editor editor = mPreferences.edit();
         boolean[] enabledButtons = new boolean[14];
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle(R.string.emulation_toggle_controls);
 
         for (int i = 0; i < enabledButtons.length; i++) {
             // Buttons that are disabled by default
@@ -587,63 +617,47 @@ public final class EmulationActivity extends AppCompatActivity {
 
             enabledButtons[i] = mPreferences.getBoolean("buttonToggle" + i, defaultValue);
         }
-        builder.setMultiChoiceItems(R.array.n3dsButtons, enabledButtons,
-                (dialog, indexSelected, isChecked) -> editor
-                        .putBoolean("buttonToggle" + indexSelected, isChecked));
-        builder.setPositiveButton(android.R.string.ok, (dialogInterface, i) ->
-        {
-            editor.apply();
 
-            mEmulationFragment.refreshInputOverlay();
-        });
-
-        AlertDialog alertDialog = builder.create();
-        alertDialog.show();
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.emulation_toggle_controls)
+                .setMultiChoiceItems(R.array.n3dsButtons, enabledButtons,
+                        (dialog, indexSelected, isChecked) -> editor
+                                .putBoolean("buttonToggle" + indexSelected, isChecked))
+                .setPositiveButton(android.R.string.ok, (dialogInterface, i) ->
+                {
+                    editor.apply();
+                    mEmulationFragment.refreshInputOverlay();
+                })
+                .show();
     }
 
     private void adjustScale() {
         LayoutInflater inflater = LayoutInflater.from(this);
-        View view = inflater.inflate(R.layout.dialog_seekbar, null);
+        View view = inflater.inflate(R.layout.dialog_slider, null);
 
-        final SeekBar seekbar = view.findViewById(R.id.seekbar);
-        final TextView value = view.findViewById(R.id.text_value);
+        final Slider slider = view.findViewById(R.id.slider);
+        final TextView textValue = view.findViewById(R.id.text_value);
         final TextView units = view.findViewById(R.id.text_units);
 
-        seekbar.setMax(150);
-        seekbar.setProgress(mPreferences.getInt("controlScale", 50));
-        seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                value.setText(String.valueOf(progress + 50));
-            }
-
-            public void onStopTrackingTouch(SeekBar seekBar) {
-                setControlScale(seekbar.getProgress());
-            }
+        slider.setValueTo(150);
+        slider.setValue(mPreferences.getInt("controlScale", 50));
+        slider.addOnChangeListener((slider1, progress, fromUser) -> {
+            textValue.setText(String.valueOf((int) progress + 50));
+            setControlScale((int) slider1.getValue());
         });
 
-        value.setText(String.valueOf(seekbar.getProgress() + 50));
+        textValue.setText(String.valueOf((int) slider.getValue() + 50));
         units.setText("%");
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle(R.string.emulation_control_scale);
-        builder.setView(view);
-        final int previousProgress = seekbar.getProgress();
-        builder.setNegativeButton(android.R.string.cancel, (dialogInterface, i) -> {
-            setControlScale(previousProgress);
-        });
-        builder.setPositiveButton(android.R.string.ok, (dialogInterface, i) ->
-        {
-            setControlScale(seekbar.getProgress());
-        });
-        builder.setNeutralButton(R.string.slider_default, (dialogInterface, i) -> {
-            setControlScale(50);
-        });
+        final int previousProgress = (int) slider.getValue();
 
-        AlertDialog alertDialog = builder.create();
-        alertDialog.show();
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.emulation_control_scale)
+                .setView(view)
+                .setNegativeButton(android.R.string.cancel, (dialogInterface, i) -> setControlScale(previousProgress))
+                .setPositiveButton(android.R.string.ok, (dialogInterface, i) -> setControlScale((int) slider.getValue()))
+                .setNeutralButton(R.string.slider_default, (dialogInterface, i) -> setControlScale(50))
+                .show();
     }
 
     private void setControlScale(int scale) {
@@ -654,12 +668,10 @@ public final class EmulationActivity extends AppCompatActivity {
     }
 
     private void resetOverlay() {
-        new AlertDialog.Builder(this)
+        new MaterialAlertDialogBuilder(this)
                 .setTitle(getString(R.string.emulation_touch_overlay_reset))
                 .setPositiveButton(android.R.string.yes, (dialogInterface, i) -> mEmulationFragment.resetInputOverlay())
-                .setNegativeButton(android.R.string.cancel, (dialogInterface, i) -> {
-                })
-                .create()
+                .setNegativeButton(android.R.string.cancel, null)
                 .show();
     }
 

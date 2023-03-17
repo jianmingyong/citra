@@ -174,6 +174,7 @@ public:
     /// processes access to specific I/O regions and device memory.
     boost::container::static_vector<AddressMapping, 8> address_mappings;
     ProcessFlags flags;
+    bool no_thread_restrictions = false;
     /// Kernel compatibility version for this process
     u16 kernel_version = 0;
     /// The default CPU for this process, threads are scheduled on this cpu by default.
@@ -183,6 +184,9 @@ public:
 
     /// The id of this process
     u32 process_id;
+
+    // Creation time in ticks of the process.
+    u64 creation_time_ticks;
 
     /**
      * Parses a list of kernel capability descriptors (as found in the ExHeader) and applies them
@@ -199,6 +203,11 @@ public:
      * Applies address space changes and launches the process main thread.
      */
     void Run(s32 main_thread_priority, u32 stack_size);
+
+    /**
+     * Called when the process exits by svc
+     */
+    void Exit();
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     // Memory Management

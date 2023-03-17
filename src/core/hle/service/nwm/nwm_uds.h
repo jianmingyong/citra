@@ -65,7 +65,7 @@ static_assert(sizeof(NodeInfo) == 40, "NodeInfo has incorrect size.");
 
 using NodeList = std::vector<NodeInfo>;
 
-enum class NetworkStatus {
+enum class NetworkStatus : u32 {
     NotConnected = 3,
     ConnectedAsHost = 6,
     Connecting = 7,
@@ -73,15 +73,15 @@ enum class NetworkStatus {
     ConnectedAsSpectator = 10,
 };
 
-enum class DisconnectStatus {
-    Connected = 1,
-    NotConnected = 2,
-    // TODO(B3N30): Figure out the other values
+enum class NetworkStatusChangeReason : u32 {
+    None = 0,
+    ConnectionEstablished = 1,
+    ConnectionLost = 4,
 };
 
 struct ConnectionStatus {
-    u32_le status;
-    u32_le disconnect_reason;
+    enum_le<NetworkStatus> status;
+    enum_le<NetworkStatusChangeReason> status_change_reason;
     u16_le network_node_id;
     u16_le changed_nodes;
     u16_le nodes[UDSMaxNodes];
@@ -459,7 +459,7 @@ private:
                           const u8* network_info_buffer, std::size_t network_info_size,
                           u8 connection_type, std::vector<u8> passphrase);
 
-    void BeaconBroadcastCallback(u64 userdata, s64 cycles_late);
+    void BeaconBroadcastCallback(std::uintptr_t user_data, s64 cycles_late);
 
     /**
      * Returns a list of received 802.11 beacon frames from the specified sender since the last

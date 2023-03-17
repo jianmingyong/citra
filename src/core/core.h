@@ -61,6 +61,7 @@ class RendererBase;
 
 namespace Core {
 
+class ExclusiveMonitor;
 class Timing;
 
 class System {
@@ -81,14 +82,16 @@ public:
         ErrorSystemMode,            ///< Error determining the system mode
         ErrorLoader,                ///< Error loading the specified application
         ErrorLoader_ErrorEncrypted, ///< Error loading the specified application due to encryption
-        ErrorLoader_ErrorInvalidFormat,     ///< Error loading the specified application due to an
-                                            /// invalid format
-        ErrorSystemFiles,                   ///< Error in finding system files
-        ErrorVideoCore,                     ///< Error in the video core
+        ErrorLoader_ErrorInvalidFormat, ///< Error loading the specified application due to an
+                                        /// invalid format
+        ErrorLoader_ErrorGbaTitle, ///< Error loading the specified application as it is GBA Virtual
+                                   ///< Console
+        ErrorSystemFiles,          ///< Error in finding system files
+        ErrorVideoCore,            ///< Error in the video core
         ErrorVideoCore_ErrorGenericDrivers, ///< Error in the video core due to the user having
                                             /// generic drivers installed
-        ErrorVideoCore_ErrorBelowGL33,      ///< Error in the video core due to the user not having
-                                            /// OpenGL 3.3 or higher
+        ErrorVideoCore_ErrorBelowGL43,      ///< Error in the video core due to the user not having
+                                            /// OpenGL 4.3 or higher
         ErrorSavestate,                     ///< Error saving or loading
         ShutdownRequested,                  ///< Emulated program requested a system shutdown
         ErrorUnknown                        ///< Any other error
@@ -125,7 +128,8 @@ public:
     bool SendSignal(Signal signal, u32 param = 0);
 
     /// Request reset of the system
-    void RequestReset() {
+    void RequestReset(const std::string& chainload = "") {
+        m_chainloadpath = chainload;
         SendSignal(Signal::Reset);
     }
 
@@ -141,7 +145,8 @@ public:
      * @param filepath String path to the executable application to load on the host file system.
      * @returns ResultStatus code, indicating if the operation succeeded.
      */
-    [[nodiscard]] ResultStatus Load(Frontend::EmuWindow& emu_window, const std::string& filepath);
+    [[nodiscard]] ResultStatus Load(Frontend::EmuWindow& emu_window, const std::string& filepath,
+                                    Frontend::EmuWindow* secondary_window = {});
 
     /**
      * Indicates if the emulated system is powered on (all subsystems initialized and able to run an
@@ -231,6 +236,9 @@ public:
     /// Gets a const reference to the kernel
     [[nodiscard]] const Kernel::KernelSystem& Kernel() const;
 
+    /// Get kernel is running
+    [[nodiscard]] bool KernelRunning();
+
     /// Gets a reference to the timing system
     [[nodiscard]] Timing& CoreTiming();
 
@@ -305,6 +313,15 @@ public:
 
     void LoadState(u32 slot);
 
+    /// Self delete ncch
+    bool SetSelfDelete(const std::string& file) {
+        if (m_filepath == file) {
+            self_delete_pending = true;
+            return true;
+        }
+        return false;
+    }
+
 private:
     /**
      * Initialize the emulated system.
@@ -313,8 +330,9 @@ private:
      * @param system_mode The system mode.
      * @return ResultStatus code, indicating if the operation succeeded.
      */
-    [[nodiscard]] ResultStatus Init(Frontend::EmuWindow& emu_window, u32 system_mode, u8 n3ds_mode,
-                                    u32 num_cores);
+    [[nodiscard]] ResultStatus Init(Frontend::EmuWindow& emu_window,
+                                    Frontend::EmuWindow* secondary_window, u32 system_mode,
+                                    u8 n3ds_mode, u32 num_cores);
 
     /// Reschedule the core emulation
     void Reschedule();
@@ -363,6 +381,8 @@ private:
     std::unique_ptr<Kernel::KernelSystem> kernel;
     std::unique_ptr<Timing> timing;
 
+    std::unique_ptr<Core::ExclusiveMonitor> exclusive_monitor;
+
 private:
     static System s_instance;
 
@@ -372,8 +392,11 @@ private:
     std::string status_details = "";
     /// Saved variables for reset
     Frontend::EmuWindow* m_emu_window;
+    Frontend::EmuWindow* m_secondary_window;
     std::string m_filepath;
+    std::string m_chainloadpath;
     u64 title_id;
+    bool self_delete_pending;
 
     std::mutex signal_mutex;
     Signal current_signal;

@@ -8,9 +8,9 @@
 #include "common/microprofile.h"
 #include "common/swap.h"
 #include "core/core.h"
+#include "core/file_sys/plugin_3gx.h"
 #include "core/hle/ipc.h"
 #include "core/hle/ipc_helpers.h"
-#include "core/hle/kernel/handle_table.h"
 #include "core/hle/kernel/shared_memory.h"
 #include "core/hle/kernel/shared_page.h"
 #include "core/hle/result.h"
@@ -71,6 +71,9 @@ static PAddr VirtualToPhysicalAddress(VAddr addr) {
     if (addr >= Memory::NEW_LINEAR_HEAP_VADDR && addr <= Memory::NEW_LINEAR_HEAP_VADDR_END) {
         return addr - Memory::NEW_LINEAR_HEAP_VADDR + Memory::FCRAM_PADDR;
     }
+    if (addr >= Memory::PLUGIN_3GX_FB_VADDR && addr <= Memory::PLUGIN_3GX_FB_VADDR_END) {
+        return addr - Memory::PLUGIN_3GX_FB_VADDR + Service::PLGLDR::PLG_LDR::GetPluginFBAddr();
+    }
 
     LOG_ERROR(HW_Memory, "Unknown virtual address @ 0x{:08X}", addr);
     // To help with debugging, set bit on address so that it's obviously invalid.
@@ -83,7 +86,9 @@ u32 GSP_GPU::GetUnusedThreadId() const {
         if (!used_thread_ids[id])
             return id;
     }
-    ASSERT_MSG(false, "All GSP threads are in use");
+
+    UNREACHABLE_MSG("All GSP threads are in use");
+    return 0;
 }
 
 /// Gets a pointer to a thread command buffer in GSP shared memory
@@ -436,8 +441,9 @@ void GSP_GPU::SignalInterruptForThread(InterruptId interrupt_id, u32 thread_id) 
     //               executing any GSP commands, only waiting on the event.
     // TODO(Subv): The real GSP module triggers PDC0 after updating both the top and bottom
     // screen, it is currently unknown what PDC1 does.
-    int screen_id =
-        (interrupt_id == InterruptId::PDC0) ? 0 : (interrupt_id == InterruptId::PDC1) ? 1 : -1;
+    int screen_id = (interrupt_id == InterruptId::PDC0)   ? 0
+                    : (interrupt_id == InterruptId::PDC1) ? 1
+                                                          : -1;
     if (screen_id != -1) {
         FrameBufferUpdate* info = GetFrameBufferInfo(thread_id, screen_id);
         if (info->is_dirty) {
@@ -657,14 +663,17 @@ void GSP_GPU::TriggerCmdReqQueue(Kernel::HLERequestContext& ctx) {
 void GSP_GPU::ImportDisplayCaptureInfo(Kernel::HLERequestContext& ctx) {
     IPC::RequestParser rp(ctx, 0x18, 0, 0);
 
-    // TODO(Subv): We're always returning the framebuffer structures for thread_id = 0,
-    // because we only support a single running application at a time.
-    // This should always return the framebuffer data that is currently displayed on the screen.
+    if (active_thread_id == UINT32_MAX) {
+        LOG_WARNING(Service_GSP, "Called without an active thread.");
 
-    u32 thread_id = 0;
+        // TODO: Find the right error code.
+        IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
+        rb.Push(-1);
+        return;
+    }
 
-    FrameBufferUpdate* top_screen = GetFrameBufferInfo(thread_id, 0);
-    FrameBufferUpdate* bottom_screen = GetFrameBufferInfo(thread_id, 1);
+    FrameBufferUpdate* top_screen = GetFrameBufferInfo(active_thread_id, 0);
+    FrameBufferUpdate* bottom_screen = GetFrameBufferInfo(active_thread_id, 1);
 
     struct CaptureInfoEntry {
         u32_le address_left;
@@ -692,6 +701,39 @@ void GSP_GPU::ImportDisplayCaptureInfo(Kernel::HLERequestContext& ctx) {
     rb.PushRaw(bottom_entry);
 
     LOG_WARNING(Service_GSP, "called");
+}
+
+void GSP_GPU::SaveVramSysArea(Kernel::HLERequestContext& ctx) {
+    IPC::RequestParser rp(ctx, 0x19, 0, 0);
+
+    LOG_INFO(Service_GSP, "called");
+
+    // TODO: This should also DMA framebuffers into VRAM and save LCD register state.
+    Memory::RasterizerFlushVirtualRegion(Memory::VRAM_VADDR, Memory::VRAM_SIZE,
+                                         Memory::FlushMode::Flush);
+    auto vram = system.Memory().GetPointer(Memory::VRAM_VADDR);
+    saved_vram.emplace(std::vector<u8>(Memory::VRAM_SIZE));
+    std::memcpy(saved_vram.get().data(), vram, Memory::VRAM_SIZE);
+
+    IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
+    rb.Push(RESULT_SUCCESS);
+}
+
+void GSP_GPU::RestoreVramSysArea(Kernel::HLERequestContext& ctx) {
+    IPC::RequestParser rp(ctx, 0x1A, 0, 0);
+
+    LOG_INFO(Service_GSP, "called");
+
+    if (saved_vram) {
+        // TODO: This should also restore LCD register state.
+        auto vram = system.Memory().GetPointer(Memory::VRAM_VADDR);
+        std::memcpy(vram, saved_vram.get().data(), Memory::VRAM_SIZE);
+        Memory::RasterizerFlushVirtualRegion(Memory::VRAM_VADDR, Memory::VRAM_SIZE,
+                                             Memory::FlushMode::Invalidate);
+    }
+
+    IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
+    rb.Push(RESULT_SUCCESS);
 }
 
 void GSP_GPU::AcquireRight(Kernel::HLERequestContext& ctx) {
@@ -802,8 +844,8 @@ GSP_GPU::GSP_GPU(Core::System& system) : ServiceFramework("gsp::Gpu", 2), system
         {0x00160042, &GSP_GPU::AcquireRight, "AcquireRight"},
         {0x00170000, &GSP_GPU::ReleaseRight, "ReleaseRight"},
         {0x00180000, &GSP_GPU::ImportDisplayCaptureInfo, "ImportDisplayCaptureInfo"},
-        {0x00190000, nullptr, "SaveVramSysArea"},
-        {0x001A0000, nullptr, "RestoreVramSysArea"},
+        {0x00190000, &GSP_GPU::SaveVramSysArea, "SaveVramSysArea"},
+        {0x001A0000, &GSP_GPU::RestoreVramSysArea, "RestoreVramSysArea"},
         {0x001B0000, nullptr, "ResetGpuCore"},
         {0x001C0040, &GSP_GPU::SetLedForceOff, "SetLedForceOff"},
         {0x001D0040, nullptr, "SetTestCommand"},

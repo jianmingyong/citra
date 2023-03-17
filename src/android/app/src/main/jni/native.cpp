@@ -17,6 +17,7 @@
 #include "common/microprofile.h"
 #include "common/scm_rev.h"
 #include "common/scope_exit.h"
+#include "common/settings.h"
 #include "common/string_util.h"
 #include "core/core.h"
 #include "core/frontend/applets/default_applets.h"
@@ -26,7 +27,7 @@
 #include "core/hle/service/am/am.h"
 #include "core/hle/service/nfc/nfc.h"
 #include "core/savestate.h"
-#include "core/settings.h"
+#include "jni/android_common/android_common.h"
 #include "jni/applets/mii_selector.h"
 #include "jni/applets/swkbd.h"
 #include "jni/camera/ndk_camera.h"
@@ -37,6 +38,7 @@
 #include "jni/game_settings.h"
 #include "jni/id_cache.h"
 #include "jni/input_manager.h"
+#include "jni/lodepng_image_interface.h"
 #include "jni/mic.h"
 #include "jni/native.h"
 #include "jni/ndk_motion.h"
@@ -58,24 +60,13 @@ std::condition_variable running_cv;
 
 } // Anonymous namespace
 
-static std::string GetJString(JNIEnv* env, jstring jstr) {
-    if (!jstr) {
-        return {};
-    }
-
-    const char* s = env->GetStringUTFChars(jstr, nullptr);
-    std::string result = s;
-    env->ReleaseStringUTFChars(jstr, s);
-    return result;
-}
-
 static bool DisplayAlertMessage(const char* caption, const char* text, bool yes_no) {
     JNIEnv* env = IDCache::GetEnvForThread();
 
     // Execute the Java method.
     jboolean result = env->CallStaticBooleanMethod(
-        IDCache::GetNativeLibraryClass(), IDCache::GetDisplayAlertMsg(), env->NewStringUTF(caption),
-        env->NewStringUTF(text), yes_no ? JNI_TRUE : JNI_FALSE);
+        IDCache::GetNativeLibraryClass(), IDCache::GetDisplayAlertMsg(), ToJString(env, caption),
+        ToJString(env, text), yes_no ? JNI_TRUE : JNI_FALSE);
 
     return result != JNI_FALSE;
 }
@@ -84,8 +75,8 @@ static std::string DisplayAlertPrompt(const char* caption, const char* text, int
     JNIEnv* env = IDCache::GetEnvForThread();
 
     jstring value = reinterpret_cast<jstring>(env->CallStaticObjectMethod(
-        IDCache::GetNativeLibraryClass(), IDCache::GetDisplayAlertPrompt(),
-        env->NewStringUTF(caption), env->NewStringUTF(text), buttonConfig));
+        IDCache::GetNativeLibraryClass(), IDCache::GetDisplayAlertPrompt(), ToJString(env, caption),
+        ToJString(env, text), buttonConfig));
 
     return GetJString(env, value);
 }
@@ -184,6 +175,9 @@ static Core::System::ResultStatus RunCitra(const std::string& filepath) {
     system.RegisterMiiSelector(std::make_shared<MiiSelector::AndroidMiiSelector>());
     system.RegisterSoftwareKeyboard(std::make_shared<SoftwareKeyboard::AndroidKeyboard>());
 
+    // Register generic image interface
+    Core::System::GetInstance().RegisterImageInterface(std::make_shared<LodePNGImageInterface>());
+
     // Register real Mic factory
     Frontend::Mic::RegisterRealMicFactory(std::make_unique<Mic::AndroidFactory>());
 
@@ -244,7 +238,7 @@ static Core::System::ResultStatus RunCitra(const std::string& filepath) {
             }
         } else {
             // Ensure no audio bleeds out while game is paused
-            const float volume = Settings::values.volume;
+            const float volume = Settings::values.volume.GetValue();
             SCOPE_EXIT({ Settings::values.volume = volume; });
             Settings::values.volume = 0;
 
@@ -719,8 +713,7 @@ void Java_org_citra_citra_1emu_NativeLibrary_LoadState(JNIEnv* env, jclass clazz
 }
 
 void Java_org_citra_citra_1emu_NativeLibrary_LogDeviceInfo(JNIEnv* env, jclass clazz) {
-    // TODO: Log the Common::g_build_fullname once the CI is setup for android
-    LOG_INFO(Frontend, "Citra Version: Android Beta | {}-{}", Common::g_scm_branch,
+    LOG_INFO(Frontend, "Citra Version: {} | {}-{}", Common::g_build_fullname, Common::g_scm_branch,
              Common::g_scm_desc);
     LOG_INFO(Frontend, "Host CPU: {}", Common::GetCPUCaps().cpu_string);
     // There is no decent way to get the OS version, so we log the API level instead.

@@ -40,6 +40,8 @@ template <typename>
 class QFutureWatcher;
 class QLabel;
 class QProgressBar;
+class QPushButton;
+class QSlider;
 class RegistersWidget;
 class Updater;
 class WaitTreeWidget;
@@ -119,6 +121,7 @@ private:
 
     void ConnectWidgetEvents();
     void ConnectMenuEvents();
+    void UpdateMenuState();
 
     void PreventOSSleep();
     void AllowOSSleep();
@@ -169,7 +172,9 @@ private:
 
 private slots:
     void OnStartGame();
+    void OnRestartGame();
     void OnPauseGame();
+    void OnPauseContinueGame();
     void OnStopGame();
     void OnSaveState();
     void OnLoadState();
@@ -183,8 +188,11 @@ private slots:
     void OnGameListOpenDirectory(const QString& directory);
     void OnGameListAddDirectory();
     void OnGameListShowList(bool show);
+    void OnGameListOpenPerGameProperties(const QString& file);
+    void OnConfigurePerGame();
     void OnMenuLoadFile();
     void OnMenuInstallCIA();
+    void OnMenuBootHomeMenu();
     void OnUpdateProgress(std::size_t written, std::size_t total);
     void OnCIAInstallReport(Service::AM::InstallStatus status, QString filepath);
     void OnCIAInstallFinished();
@@ -197,10 +205,14 @@ private slots:
     void OnDisplayTitleBars(bool);
     void InitializeHotkeys();
     void ToggleFullscreen();
+    void ToggleSecondaryFullscreen();
     void ChangeScreenLayout();
+    void UpdateSecondaryWindowVisibility();
     void ToggleScreenLayout();
     void OnSwapScreens();
     void OnRotateScreens();
+    void TriggerSwapScreens();
+    void TriggerRotateScreens();
     void OnCheats();
     void ShowFullscreen();
     void HideFullscreen();
@@ -227,6 +239,7 @@ private slots:
 private:
     Q_INVOKABLE void OnMoviePlaybackCompleted();
     void UpdateStatusBar();
+    void UpdateBootHomeMenuState();
     void LoadTranslation();
     void UpdateWindowTitle();
     void UpdateUISettings();
@@ -234,10 +247,12 @@ private:
     void InstallCIA(QStringList filepaths);
     void HideMouseCursor();
     void ShowMouseCursor();
+    void OpenPerGameConfiguration(u64 title_id, const QString& file_name);
 
     std::unique_ptr<Ui::MainWindow> ui;
 
     GRenderWindow* render_window;
+    GRenderWindow* secondary_window;
 
     GameListPlaceholder* game_list_placeholder;
     LoadingScreen* loading_screen;

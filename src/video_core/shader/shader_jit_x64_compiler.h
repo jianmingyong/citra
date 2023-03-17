@@ -4,6 +4,9 @@
 
 #pragma once
 
+#include "common/arch.h"
+#if CITRA_ARCH(x86_64)
+
 #include <array>
 #include <bitset>
 #include <cstddef>
@@ -11,7 +14,7 @@
 #include <utility>
 #include <vector>
 #include <nihstro/shader_bytecode.h>
-#include <xbyak.h>
+#include <xbyak/xbyak.h>
 #include "common/bit_set.h"
 #include "common/common_types.h"
 #include "video_core/shader/shader.h"
@@ -138,3 +141,5 @@ private:
 };
 
 } // namespace Pica::Shader
+
+#endif

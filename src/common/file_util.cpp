@@ -31,8 +31,10 @@
 #endif
 
 // 64 bit offsets for MSVC and MinGW. MinGW also needs this for using _wstat64
+#ifndef __MINGW64__
 #define stat _stat64
 #define fstat _fstat64
+#endif
 
 #else
 #ifdef __APPLE__
@@ -707,13 +709,26 @@ void SetUserPath(const std::string& path) {
             g_paths.emplace(UserPath::ConfigDir, user_path + CONFIG_DIR DIR_SEP);
             g_paths.emplace(UserPath::CacheDir, user_path + CACHE_DIR DIR_SEP);
         } else {
-            std::string data_dir = GetUserDirectory("XDG_DATA_HOME");
-            std::string config_dir = GetUserDirectory("XDG_CONFIG_HOME");
-            std::string cache_dir = GetUserDirectory("XDG_CACHE_HOME");
+            std::string data_dir = GetUserDirectory("XDG_DATA_HOME") + DIR_SEP EMU_DATA_DIR DIR_SEP;
+            std::string config_dir =
+                GetUserDirectory("XDG_CONFIG_HOME") + DIR_SEP EMU_DATA_DIR DIR_SEP;
+            std::string cache_dir =
+                GetUserDirectory("XDG_CACHE_HOME") + DIR_SEP EMU_DATA_DIR DIR_SEP;
 
-            user_path = data_dir + DIR_SEP EMU_DATA_DIR DIR_SEP;
-            g_paths.emplace(UserPath::ConfigDir, config_dir + DIR_SEP EMU_DATA_DIR DIR_SEP);
-            g_paths.emplace(UserPath::CacheDir, cache_dir + DIR_SEP EMU_DATA_DIR DIR_SEP);
+#if defined(__APPLE__)
+            // If XDG directories don't already exist from a previous setup, use standard macOS
+            // paths.
+            if (!FileUtil::Exists(data_dir) && !FileUtil::Exists(config_dir) &&
+                !FileUtil::Exists(cache_dir)) {
+                data_dir = GetHomeDirectory() + DIR_SEP MACOS_EMU_DATA_DIR DIR_SEP;
+                config_dir = data_dir + CONFIG_DIR DIR_SEP;
+                cache_dir = data_dir + CACHE_DIR DIR_SEP;
+            }
+#endif
+
+            user_path = data_dir;
+            g_paths.emplace(UserPath::ConfigDir, config_dir);
+            g_paths.emplace(UserPath::CacheDir, cache_dir);
         }
 #endif
     }
@@ -774,6 +789,9 @@ const std::string& GetDefaultUserPath(UserPath path) {
 }
 
 const void UpdateUserPath(UserPath path, const std::string& filename) {
+    if (filename.empty()) {
+        return;
+    }
     if (!FileUtil::IsDirectory(filename)) {
         LOG_ERROR(Common_Filesystem, "Path is not a directory. UserPath: {}  filename: {}", path,
                   filename);

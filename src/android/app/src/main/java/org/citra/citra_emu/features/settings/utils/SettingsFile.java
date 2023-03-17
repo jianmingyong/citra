@@ -64,6 +64,10 @@ public final class SettingsFile {
     public static final String KEY_CARDBOARD_X_SHIFT = "cardboard_x_shift";
     public static final String KEY_CARDBOARD_Y_SHIFT = "cardboard_y_shift";
 
+    public static final String KEY_DUMP_TEXTURES = "dump_textures";
+    public static final String KEY_CUSTOM_TEXTURES = "custom_textures";
+    public static final String KEY_PRELOAD_TEXTURES = "preload_textures";
+
     public static final String KEY_AUDIO_OUTPUT_ENGINE = "output_engine";
     public static final String KEY_ENABLE_AUDIO_STRETCHING = "enable_audio_stretching";
     public static final String KEY_VOLUME = "volume";
@@ -74,6 +78,8 @@ public final class SettingsFile {
     public static final String KEY_IS_NEW_3DS = "is_new_3ds";
     public static final String KEY_REGION_VALUE = "region_value";
     public static final String KEY_LANGUAGE = "language";
+    public static final String KEY_PLUGIN_LOADER = "plugin_loader";
+    public static final String KEY_ALLOW_PLUGIN_LOADER = "allow_plugin_loader";
 
     public static final String KEY_INIT_CLOCK = "init_clock";
     public static final String KEY_INIT_TIME = "init_time";

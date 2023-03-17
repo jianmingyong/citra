@@ -168,8 +168,11 @@ factor_3d =
 
 # The name of the post processing shader to apply.
 # Loaded from shaders if render_3d is off or side by side.
-# Loaded from shaders/anaglyph if render_3d is anaglyph
 pp_shader_name =
+
+# The name of the shader to apply when render_3d is anaglyph.
+# Loaded from shaders/anaglyph
+anaglyph_shader_name =
 
 # Whether to enable linear filtering or not
 # This is required for some shaders to work correctly
@@ -208,6 +211,19 @@ cardboard_screen_size =
 cardboard_x_shift =
 # -100 - 100: Screen Y-Coordinate shift as a percentage of empty space. 0 (default)
 cardboard_y_shift =
+
+[Utility]
+# Dumps textures as PNG to dump/textures/[Title ID]/.
+# 0 (default): Off, 1: On
+dump_textures =
+
+# Reads PNG files from load/textures/[Title ID]/ and replaces textures.
+# 0 (default): Off, 1: On
+custom_textures =
+
+# Loads all custom textures into memory before booting.
+# 0 (default): Off, 1: On
+preload_textures =
 
 [Audio]
 # Whether or not to enable DSP LLE
@@ -267,6 +283,11 @@ init_clock =
 # set to fixed time. Default 2000-01-01 00:00:01
 # Note: 3DS can only handle times later then Jan 1 2000
 init_time =
+
+# Plugin loader state, if enabled plugins will be loaded from the SD card.
+# You can also set if homebrew apps are allowed to enable the plugin loader
+plugin_loader =
+allow_plugin_loader =
 
 [Camera]
 # Which camera engine to use for the right outer camera

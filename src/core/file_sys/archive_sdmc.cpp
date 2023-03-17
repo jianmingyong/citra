@@ -7,11 +7,11 @@
 #include "common/archives.h"
 #include "common/file_util.h"
 #include "common/logging/log.h"
+#include "common/settings.h"
 #include "core/file_sys/archive_sdmc.h"
 #include "core/file_sys/disk_archive.h"
 #include "core/file_sys/errors.h"
 #include "core/file_sys/path_parser.h"
-#include "core/settings.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // FileSys namespace
@@ -106,7 +106,7 @@ ResultVal<std::unique_ptr<FileBackend>> SDMCArchive::OpenFileBase(const Path& pa
 
     FileUtil::IOFile file(full_path, mode.write_flag ? "r+b" : "rb");
     if (!file.IsOpen()) {
-        LOG_CRITICAL(Service_FS, "(unreachable) Unknown error opening {}", full_path);
+        LOG_CRITICAL(Service_FS, "Error opening {}: {}", full_path, GetLastErrorMsg());
         return ERROR_NOT_FOUND;
     }
 
@@ -132,7 +132,7 @@ ResultCode SDMCArchive::DeleteFile(const Path& path) const {
     case PathParser::PathNotFound:
     case PathParser::FileInPath:
     case PathParser::NotFound:
-        LOG_ERROR(Service_FS, "{} not found", full_path);
+        LOG_DEBUG(Service_FS, "{} not found", full_path);
         return ERROR_NOT_FOUND;
     case PathParser::DirectoryFound:
         LOG_ERROR(Service_FS, "{} is not a file", full_path);
@@ -291,7 +291,7 @@ ResultCode SDMCArchive::CreateDirectory(const Path& path) const {
         return ERROR_NOT_FOUND;
     case PathParser::DirectoryFound:
     case PathParser::FileFound:
-        LOG_ERROR(Service_FS, "{} already exists", full_path);
+        LOG_DEBUG(Service_FS, "{} already exists", full_path);
         return ERROR_ALREADY_EXISTS;
     case PathParser::NotFound:
         break; // Expected 'success' case

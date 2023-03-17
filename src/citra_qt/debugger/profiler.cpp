@@ -50,9 +50,8 @@ MicroProfileDialog::MicroProfileDialog(QWidget* parent) : QWidget(parent, Qt::Di
     setObjectName(QStringLiteral("MicroProfile"));
     setWindowTitle(tr("MicroProfile"));
     resize(1000, 600);
-    // Remove the "?" button from the titlebar and enable the maximize button
-    setWindowFlags((windowFlags() & ~Qt::WindowContextHelpButtonHint) |
-                   Qt::WindowMaximizeButtonHint);
+    // Enable the maximize button
+    setWindowFlags(windowFlags() | Qt::WindowMaximizeButtonHint);
 
 #if MICROPROFILE_ENABLED
 
@@ -160,7 +159,8 @@ void MicroProfileWidget::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void MicroProfileWidget::wheelEvent(QWheelEvent* event) {
-    MicroProfileMousePosition(event->x() / x_scale, event->y() / y_scale, event->delta() / 120);
+    MicroProfileMousePosition(event->position().x() / x_scale, event->position().y() / y_scale,
+                              event->angleDelta().y() / 120);
     event->accept();
 }
 

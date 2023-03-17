@@ -11,10 +11,10 @@
 #include "common/file_util.h"
 #include "common/logging/log.h"
 #include "common/scm_rev.h"
+#include "common/settings.h"
 #include "common/zstd_compression.h"
 #include "core/core.h"
 #include "core/hle/kernel/process.h"
-#include "core/settings.h"
 #include "video_core/renderer_opengl/gl_shader_disk_cache.h"
 
 namespace OpenGL {
@@ -33,6 +33,8 @@ enum class PrecompiledEntryKind : u32 {
 
 constexpr u32 NativeVersion = 1;
 
+// The hash is based on relevant files. The list of files can be found at src/common/CMakeLists.txt
+// and CMakeModules/GenerateSCMRev.cmake
 ShaderCacheVersionHash GetShaderCacheVersionHash() {
     ShaderCacheVersionHash hash{};
     const std::size_t length = std::min(std::strlen(Common::g_shader_cache_version), hash.size());

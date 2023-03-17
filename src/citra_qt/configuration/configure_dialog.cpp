@@ -7,18 +7,18 @@
 #include "citra_qt/configuration/config.h"
 #include "citra_qt/configuration/configure_dialog.h"
 #include "citra_qt/hotkeys.h"
-#include "core/settings.h"
+#include "common/settings.h"
 #include "ui_configure.h"
 
 ConfigureDialog::ConfigureDialog(QWidget* parent, HotkeyRegistry& registry, bool enable_web_config)
     : QDialog(parent), ui(std::make_unique<Ui::ConfigureDialog>()), registry(registry) {
+    Settings::SetConfiguringGlobal(true);
+
     ui->setupUi(this);
     ui->hotkeysTab->Populate(registry);
     ui->webTab->SetWebServiceConfigEnabled(enable_web_config);
 
     PopulateSelectionList();
-
-    setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
     connect(ui->uiTab, &ConfigureUi::LanguageChanged, this, &ConfigureDialog::OnLanguageChanged);
     connect(ui->selectorList, &QListWidget::itemSelectionChanged, this,

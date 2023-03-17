@@ -12,12 +12,15 @@
 #include "common/common_funcs.h"
 #include "common/logging/log.h"
 #include "common/serialization/boost_vector.hpp"
+#include "core/core.h"
 #include "core/hle/kernel/errors.h"
 #include "core/hle/kernel/memory.h"
 #include "core/hle/kernel/process.h"
 #include "core/hle/kernel/resource_limit.h"
 #include "core/hle/kernel/thread.h"
 #include "core/hle/kernel/vm_manager.h"
+#include "core/hle/service/plgldr/plgldr.h"
+#include "core/loader/loader.h"
 #include "core/memory.h"
 
 SERIALIZE_EXPORT_IMPL(Kernel::Process)
@@ -36,10 +39,12 @@ void Process::serialize(Archive& ar, const unsigned int file_version) {
     ar&(boost::container::vector<AddressMapping, boost::container::dtl::static_storage_allocator<
                                                      AddressMapping, 8, 0, true>>&)address_mappings;
     ar& flags.raw;
+    ar& no_thread_restrictions;
     ar& kernel_version;
     ar& ideal_processor;
     ar& status;
     ar& process_id;
+    ar& creation_time_ticks;
     ar& vm_manager;
     ar& memory_used;
     ar& memory_region;
@@ -68,9 +73,14 @@ std::shared_ptr<Process> KernelSystem::CreateProcess(std::shared_ptr<CodeSet> co
     process->flags.memory_region.Assign(MemoryRegion::APPLICATION);
     process->status = ProcessStatus::Created;
     process->process_id = ++next_process_id;
+    process->creation_time_ticks = timing.GetTicks();
 
     process_list.push_back(process);
     return process;
+}
+
+void KernelSystem::RemoveProcess(std::shared_ptr<Process> process) {
+    std::erase(process_list, process);
 }
 
 void Process::ParseKernelCaps(const u32* kernel_caps, std::size_t len) {
@@ -127,7 +137,7 @@ void Process::ParseKernelCaps(const u32* kernel_caps, std::size_t len) {
             // Mapped memory page
             AddressMapping mapping;
             mapping.address = descriptor << 12;
-            mapping.size = Memory::PAGE_SIZE;
+            mapping.size = Memory::CITRA_PAGE_SIZE;
             mapping.read_only = false;
             mapping.unk_flag = false;
 
@@ -186,10 +196,22 @@ void Process::Run(s32 main_thread_priority, u32 stack_size) {
         kernel.HandleSpecialMapping(vm_manager, mapping);
     }
 
+    auto plgldr = Service::PLGLDR::GetService(Core::System::GetInstance());
+    if (plgldr) {
+        plgldr->OnProcessRun(*this, kernel);
+    }
+
     status = ProcessStatus::Running;
 
     vm_manager.LogLayout(Log::Level::Debug);
     Kernel::SetupMainThread(kernel, codeset->entrypoint, main_thread_priority, SharedFrom(this));
+}
+
+void Process::Exit() {
+    auto plgldr = Service::PLGLDR::GetService(Core::System::GetInstance());
+    if (plgldr) {
+        plgldr->OnProcessExit(*this, kernel);
+    }
 }
 
 VAddr Process::GetLinearHeapAreaAddress() const {
@@ -265,7 +287,7 @@ ResultCode Process::HeapFree(VAddr target, u32 size) {
 
     // Free heaps block by block
     CASCADE_RESULT(auto backing_blocks, vm_manager.GetBackingBlocksForRange(target, size));
-    for (const auto [backing_memory, block_size] : backing_blocks) {
+    for (const auto& [backing_memory, block_size] : backing_blocks) {
         memory_region->Free(kernel.memory.GetFCRAMOffset(backing_memory.GetPtr()), block_size);
     }
 
@@ -396,7 +418,7 @@ ResultCode Process::Map(VAddr target, VAddr source, u32 size, VMAPermission perm
 
     CASCADE_RESULT(auto backing_blocks, vm_manager.GetBackingBlocksForRange(source, size));
     VAddr interval_target = target;
-    for (const auto [backing_memory, block_size] : backing_blocks) {
+    for (const auto& [backing_memory, block_size] : backing_blocks) {
         auto target_vma =
             vm_manager.MapBackingMemory(interval_target, backing_memory, block_size, target_state);
         ASSERT(target_vma.Succeeded());
@@ -449,10 +471,12 @@ ResultCode Process::Unmap(VAddr target, VAddr source, u32 size, VMAPermission pe
 }
 
 Kernel::Process::Process(KernelSystem& kernel)
-    : Object(kernel), handle_table(kernel), vm_manager(kernel.memory), kernel(kernel) {
+    : Object(kernel), handle_table(kernel), vm_manager(kernel.memory, *this), kernel(kernel) {
     kernel.memory.RegisterPageTable(vm_manager.page_table);
 }
 Kernel::Process::~Process() {
+    LOG_INFO(Kernel, "Cleaning up process {}", process_id);
+
     // Release all objects this process owns first so that their potential destructor can do clean
     // up with this process before further destruction.
     // TODO(wwylele): explicitly destroy or invalidate objects this process owns (threads, shared

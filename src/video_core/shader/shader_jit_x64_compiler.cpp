@@ -2,6 +2,9 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include "common/arch.h"
+#if CITRA_ARCH(x86_64)
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -192,7 +195,8 @@ void JitShader::Compile_SwizzleSrc(Instruction instr, unsigned src_num, SourceRe
     }
 
     int src_offset_disp = (int)src_offset;
-    ASSERT_MSG(src_offset == src_offset_disp, "Source register offset too large for int type");
+    ASSERT_MSG(src_offset == static_cast<std::size_t>(src_offset_disp),
+               "Source register offset too large for int type");
 
     unsigned operand_desc_id;
 
@@ -1130,3 +1134,5 @@ Xbyak::Label JitShader::CompilePrelude_Exp2() {
 }
 
 } // namespace Pica::Shader
+
+#endif // CITRA_ARCH(x86_64)

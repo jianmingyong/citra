@@ -12,6 +12,8 @@ add_library(core STATIC
     arm/dyncom/arm_dyncom_thumb.h
     arm/dyncom/arm_dyncom_trans.cpp
     arm/dyncom/arm_dyncom_trans.h
+    arm/exclusive_monitor.cpp
+    arm/exclusive_monitor.h
     arm/skyeye_common/arm_regformat.h
     arm/skyeye_common/armstate.cpp
     arm/skyeye_common/armstate.h
@@ -78,6 +80,9 @@ add_library(core STATIC
     file_sys/patch.h
     file_sys/path_parser.cpp
     file_sys/path_parser.h
+    file_sys/plugin_3gx.cpp
+    file_sys/plugin_3gx.h
+    file_sys/plugin_3gx_bootloader.h
     file_sys/romfs_reader.cpp
     file_sys/romfs_reader.h
     file_sys/savedata_archive.cpp
@@ -363,6 +368,8 @@ add_library(core STATIC
     hle/service/nwm/uds_connection.h
     hle/service/nwm/uds_data.cpp
     hle/service/nwm/uds_data.h
+    hle/service/plgldr/plgldr.cpp
+    hle/service/plgldr/plgldr.h
     hle/service/pm/pm.cpp
     hle/service/pm/pm.h
     hle/service/pm/pm_app.cpp
@@ -442,6 +449,7 @@ add_library(core STATIC
     movie.h
     perf_stats.cpp
     perf_stats.h
+    precompiled_headers.h
     rpc/packet.cpp
     rpc/packet.h
     rpc/rpc_server.cpp
@@ -452,8 +460,6 @@ add_library(core STATIC
     rpc/udp_server.h
     savestate.cpp
     savestate.h
-    settings.cpp
-    settings.h
     telemetry_session.cpp
     telemetry_session.h
     tracer/citrace.h
@@ -471,7 +477,8 @@ endif()
 create_target_directory_groups(core)
 
 target_link_libraries(core PUBLIC common PRIVATE audio_core network video_core)
-target_link_libraries(core PUBLIC Boost::boost PRIVATE cryptopp fmt open_source_archives Boost::serialization)
+target_link_libraries(core PUBLIC Boost::boost PRIVATE cryptopp fmt::fmt open_source_archives Boost::serialization)
+set_target_properties(core PROPERTIES INTERPROCEDURAL_OPTIMIZATION ${ENABLE_LTO})
 
 if (ENABLE_WEB_SERVICE)
     target_compile_definitions(core PRIVATE -DENABLE_WEB_SERVICE -DCPPHTTPLIB_OPENSSL_SUPPORT)
@@ -481,16 +488,24 @@ if (ENABLE_WEB_SERVICE)
     endif()
 endif()
 
-if (ARCHITECTURE_x86_64 OR ARCHITECTURE_ARM64)
+if ("x86_64" IN_LIST ARCHITECTURE OR "arm64" IN_LIST ARCHITECTURE)
     target_sources(core PRIVATE
         arm/dynarmic/arm_dynarmic.cpp
         arm/dynarmic/arm_dynarmic.h
         arm/dynarmic/arm_dynarmic_cp15.cpp
         arm/dynarmic/arm_dynarmic_cp15.h
+        arm/dynarmic/arm_exclusive_monitor.cpp
+        arm/dynarmic/arm_exclusive_monitor.h
+        arm/dynarmic/arm_tick_counts.cpp
+        arm/dynarmic/arm_tick_counts.h
     )
     target_link_libraries(core PRIVATE dynarmic)
 endif()
 
 if (ENABLE_FFMPEG_VIDEO_DUMPER)
     target_link_libraries(core PUBLIC FFmpeg::avcodec FFmpeg::avformat FFmpeg::swscale FFmpeg::swresample FFmpeg::avutil)
+endif()
+
+if (CITRA_USE_PRECOMPILED_HEADERS)
+    target_precompile_headers(core PRIVATE precompiled_headers.h)
 endif()

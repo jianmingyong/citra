@@ -85,6 +85,11 @@ ResultStatus AppLoader_NCCH::LoadExec(std::shared_ptr<Kernel::Process>& process)
     u64_le program_id;
     if (ResultStatus::Success == ReadCode(code) &&
         ResultStatus::Success == ReadProgramId(program_id)) {
+        if (IsGbaVirtualConsole(code)) {
+            LOG_ERROR(Loader, "Encountered unsupported GBA Virtual Console code section.");
+            return ResultStatus::ErrorGbaTitle;
+        }
+
         std::string process_name = Common::StringFromFixedZeroTerminatedBuffer(
             (const char*)overlay_ncch->exheader_header.codeset_info.name, 8);
 
@@ -94,13 +99,13 @@ ResultStatus AppLoader_NCCH::LoadExec(std::shared_ptr<Kernel::Process>& process)
         codeset->CodeSegment().offset = 0;
         codeset->CodeSegment().addr = overlay_ncch->exheader_header.codeset_info.text.address;
         codeset->CodeSegment().size =
-            overlay_ncch->exheader_header.codeset_info.text.num_max_pages * Memory::PAGE_SIZE;
+            overlay_ncch->exheader_header.codeset_info.text.num_max_pages * Memory::CITRA_PAGE_SIZE;
 
         codeset->RODataSegment().offset =
             codeset->CodeSegment().offset + codeset->CodeSegment().size;
         codeset->RODataSegment().addr = overlay_ncch->exheader_header.codeset_info.ro.address;
         codeset->RODataSegment().size =
-            overlay_ncch->exheader_header.codeset_info.ro.num_max_pages * Memory::PAGE_SIZE;
+            overlay_ncch->exheader_header.codeset_info.ro.num_max_pages * Memory::CITRA_PAGE_SIZE;
 
         // TODO(yuriks): Not sure if the bss size is added to the page-aligned .data size or just
         //               to the regular size. Playing it safe for now.
@@ -111,7 +116,8 @@ ResultStatus AppLoader_NCCH::LoadExec(std::shared_ptr<Kernel::Process>& process)
             codeset->RODataSegment().offset + codeset->RODataSegment().size;
         codeset->DataSegment().addr = overlay_ncch->exheader_header.codeset_info.data.address;
         codeset->DataSegment().size =
-            overlay_ncch->exheader_header.codeset_info.data.num_max_pages * Memory::PAGE_SIZE +
+            overlay_ncch->exheader_header.codeset_info.data.num_max_pages *
+                Memory::CITRA_PAGE_SIZE +
             bss_page_size;
 
         // Apply patches now that the entire codeset (including .bss) has been allocated
@@ -174,6 +180,12 @@ void AppLoader_NCCH::ParseRegionLockoutInfo() {
         ASSERT_MSG(cfg, "CFG Module missing!");
         cfg->SetPreferredRegionCodes(regions);
     }
+}
+
+bool AppLoader_NCCH::IsGbaVirtualConsole(const std::vector<u8>& code) {
+    const u32* gbaVcHeader = reinterpret_cast<const u32*>(code.data() + code.size() - 0x10);
+    return code.size() >= 0x10 && gbaVcHeader[0] == MakeMagic('.', 'C', 'A', 'A') &&
+           gbaVcHeader[1] == 1;
 }
 
 ResultStatus AppLoader_NCCH::Load(std::shared_ptr<Kernel::Process>& process) {

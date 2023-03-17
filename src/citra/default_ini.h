@@ -166,10 +166,17 @@ render_3d =
 # 0 - 100: Intensity. 0 (default)
 factor_3d =
 
+# Change Default Eye to Render When in Monoscopic Mode
+# 0 (default): Left, 1: Right
+mono_render_option =
+
 # The name of the post processing shader to apply.
 # Loaded from shaders if render_3d is off or side by side.
-# Loaded from shaders/anaglyph if render_3d is anaglyph
 pp_shader_name =
+
+# The name of the shader to apply when render_3d is anaglyph.
+# Loaded from shaders/anaglyph
+anaglyph_shader_name =
 
 # Whether to enable linear filtering or not
 # This is required for some shaders to work correctly
@@ -178,7 +185,11 @@ filter_mode =
 
 [Layout]
 # Layout for the screen inside the render window.
-# 0 (default): Default Top Bottom Screen, 1: Single Screen Only, 2: Large Screen Small Screen, 3: Side by Side
+# 0 (default): Default Top Bottom Screen
+# 1: Single Screen Only
+# 2: Large Screen Small Screen
+# 3: Side by Side
+# 4: Separate Windows
 layout_option =
 
 # Toggle custom layout (using the settings below) on or off.
@@ -196,6 +207,9 @@ custom_bottom_top =
 custom_bottom_right =
 custom_bottom_bottom =
 
+# Opacity of second layer when using custom layout option (bottom screen unless swapped)
+custom_second_layer_opacity =
+
 # Swaps the prominent screen with the other screen.
 # For example, if Single Screen is chosen, setting this to 1 will display the bottom screen instead of the top screen.
 # 0 (default): Top Screen is prominent, 1: Bottom Screen is prominent
@@ -204,6 +218,10 @@ swap_screen =
 # Toggle upright orientation, for book style games.
 # 0 (default): Off, 1: On
 upright_screen =
+
+# The proportion between the large and small screens when playing in Large Screen Small Screen layout.
+# Must be a real value between 1.0 and 16.0. Default is 4
+large_screen_proportion =
 
 # Dumps textures as PNG to dump/textures/[Title ID]/.
 # 0 (default): Off, 1: On
@@ -249,6 +267,10 @@ volume =
 # Whether to create a virtual SD card.
 # 1 (default): Yes, 0: No
 use_virtual_sd =
+
+# Whether to use custom storage locations
+# 1: Yes, 0 (default): No
+use_custom_storage =
 
 # The path of the virtual SD card directory.
 # empty (default) will use the user_path

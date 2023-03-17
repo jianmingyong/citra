@@ -1,13 +1,10 @@
-// Copyright 2014 Citra Emulator Project
+// Copyright 2022 Citra Emulator Project
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
 #pragma once
 
 #include <array>
-#include <glad/glad.h>
-#include "common/common_types.h"
-#include "common/math_util.h"
 #include "core/hw/gpu.h"
 #include "video_core/renderer_base.h"
 #include "video_core/renderer_opengl/frame_dumper_opengl.h"
@@ -59,7 +56,7 @@ struct PresentationTexture {
 
 class RendererOpenGL : public RendererBase {
 public:
-    explicit RendererOpenGL(Frontend::EmuWindow& window);
+    explicit RendererOpenGL(Frontend::EmuWindow& window, Frontend::EmuWindow* secondary_window);
     ~RendererOpenGL() override;
 
     /// Initialize the renderer
@@ -73,7 +70,7 @@ public:
 
     /// Draws the latest frame from texture mailbox to the currently bound draw framebuffer in this
     /// context
-    void TryPresent(int timeout_ms) override;
+    void TryPresent(int timeout_ms, bool is_secondary) override;
 
     /// Prepares for video dumping (e.g. create necessary buffers, etc)
     void PrepareVideoDumping() override;
@@ -92,6 +89,13 @@ private:
     void ConfigureFramebufferTexture(TextureInfo& texture,
                                      const GPU::Regs::FramebufferConfig& framebuffer);
     void DrawScreens(const Layout::FramebufferLayout& layout, bool flipped);
+    void ApplySecondLayerOpacity();
+    void ResetSecondLayerOpacity();
+    void DrawBottomScreen(const Layout::FramebufferLayout& layout,
+                          const Common::Rectangle<u32>& bottom_screen,
+                          const bool stereo_single_screen);
+    void DrawTopScreen(const Layout::FramebufferLayout& layout,
+                       const Common::Rectangle<u32>& top_screen, const bool stereo_single_screen);
     void DrawSingleScreenRotated(const ScreenInfo& screen_info, float x, float y, float w, float h);
     void DrawSingleScreen(const ScreenInfo& screen_info, float x, float y, float w, float h);
     void DrawSingleScreenStereoRotated(const ScreenInfo& screen_info_l,

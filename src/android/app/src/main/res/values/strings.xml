@@ -51,6 +51,10 @@
     <string name="init_time_description">If the \"System clock type\" setting is set to \"Simulated clock\", this changes the fixed date and time to start at.</string>
     <string name="emulated_region">Emulated region</string>
     <string name="emulated_language">Emulated language</string>
+    <string name="plugin_loader">Enable 3GX Plugin Loader</string>
+    <string name="plugin_loader_description">Loads 3GX plugins from the emulated SD if they are available.</string>
+    <string name="allow_plugin_loader">Allow apps to change plugin loader state</string>
+    <string name="allow_plugin_loader_description">Allow homebrew apps to enable the plugin loader even when it is disabled.</string>
 
     <!-- Camera settings strings -->
     <string name="inner_camera">Inner Camera</string>
@@ -103,7 +107,13 @@
     <string name="use_shader_jit">Use shader JIT</string>
     <string name="use_disk_shader_cache">Use disk shader cache</string>
     <string name="use_disk_shader_cache_description">Reduce stuttering by storing and loading generated shaders to disk. It cannot be used without Enabling Hardware Shader.</string>
-
+    <string name="utility">Utility</string>
+    <string name="dump_textures">Dump textures</string>
+    <string name="dump_textures_description">Dumps textures to dump/textures/[GAME ID]</string>
+    <string name="custom_textures">Use custom textures</string>
+    <string name="custom_textures_description">Uses custom textures found in load/textures/[GAME ID]</string>
+    <string name="preload_textures">Preload custom textures</string>
+    <string name="preload_textures_description">Loads all custom textures into memory. This feature can use a lot of memory.</string>
     <!-- Premium strings -->
     <string name="premium_text">Premium</string>
     <string name="premium_settings_upsell">Upgrade to Premium and support Citra!</string>
@@ -147,6 +157,7 @@
     <string name="loader_error_invalid_format">Invalid ROM format</string>
 
     <!-- Emulation Menu -->
+    <string name="emulation_menu_help">Press Back to access the menu.</string>
     <string name="emulation_save_state">Save State</string>
     <string name="emulation_load_state">Load State</string>
     <string name="emulation_empty_state_slot">Slot %1$d</string>
@@ -160,6 +171,7 @@
     <string name="emulation_control_joystick_rel_center">Relative Stick Center</string>
     <string name="emulation_control_dpad_slide_enable">Enable D-Pad Sliding</string>
     <string name="emulation_open_settings">Open Settings</string>
+    <string name="emulation_open_cheats">Open Cheats</string>
     <string name="emulation_switch_screen_layout">Landscape Screen Layout</string>
     <string name="emulation_screen_layout_landscape">Default</string>
     <string name="emulation_screen_layout_portrait">Portrait</string>
@@ -223,4 +235,17 @@
     <!-- Disk shader cache -->
     <string name="preparing_shaders">Preparing shaders</string>
     <string name="building_shaders">Building shaders</string>
+
+    <!-- Cheats -->
+    <string name="cheats">Cheats</string>
+    <string name="cheats_add">Add Cheat</string>
+    <string name="cheats_name">Name</string>
+    <string name="cheats_notes">Notes</string>
+    <string name="cheats_code">Code</string>
+    <string name="cheats_edit">Edit</string>
+    <string name="cheats_delete">Delete</string>
+    <string name="cheats_delete_confirmation">Are you sure you want to delete \"%1$s\"?</string>
+    <string name="cheats_error_no_name">Name can\'t be empty</string>
+    <string name="cheats_error_no_code_lines">Code can\'t be empty</string>
+    <string name="cheats_error_on_line">Error on line %1$d</string>
 </resources>

@@ -192,11 +192,15 @@ public final class SettingsFragmentPresenter {
         Setting language = systemSection.getSetting(SettingsFile.KEY_LANGUAGE);
         Setting systemClock = systemSection.getSetting(SettingsFile.KEY_INIT_CLOCK);
         Setting dateTime = systemSection.getSetting(SettingsFile.KEY_INIT_TIME);
+        Setting pluginLoader = systemSection.getSetting(SettingsFile.KEY_PLUGIN_LOADER);
+        Setting allowPluginLoader = systemSection.getSetting(SettingsFile.KEY_ALLOW_PLUGIN_LOADER);
 
         sl.add(new SingleChoiceSetting(SettingsFile.KEY_REGION_VALUE, Settings.SECTION_SYSTEM, R.string.emulated_region, 0, R.array.regionNames, R.array.regionValues, -1, region));
         sl.add(new SingleChoiceSetting(SettingsFile.KEY_LANGUAGE, Settings.SECTION_SYSTEM, R.string.emulated_language, 0, R.array.languageNames, R.array.languageValues, 1, language));
         sl.add(new SingleChoiceSetting(SettingsFile.KEY_INIT_CLOCK, Settings.SECTION_SYSTEM, R.string.init_clock, R.string.init_clock_description, R.array.systemClockNames, R.array.systemClockValues, 0, systemClock));
         sl.add(new DateTimeSetting(SettingsFile.KEY_INIT_TIME, Settings.SECTION_SYSTEM, R.string.init_time, R.string.init_time_description, "2000-01-01 00:00:01", dateTime));
+        sl.add(new CheckBoxSetting(SettingsFile.KEY_PLUGIN_LOADER, Settings.SECTION_SYSTEM, R.string.plugin_loader, R.string.plugin_loader_description, false, pluginLoader));
+        sl.add(new CheckBoxSetting(SettingsFile.KEY_ALLOW_PLUGIN_LOADER, Settings.SECTION_SYSTEM, R.string.allow_plugin_loader, R.string.allow_plugin_loader_description, true, allowPluginLoader));
     }
 
     private void addCameraSettings(ArrayList<SettingsItem> sl) {
@@ -357,11 +361,14 @@ public final class SettingsFragmentPresenter {
         Setting render3dMode = rendererSection.getSetting(SettingsFile.KEY_RENDER_3D);
         Setting factor3d = rendererSection.getSetting(SettingsFile.KEY_FACTOR_3D);
         Setting useDiskShaderCache = rendererSection.getSetting(SettingsFile.KEY_USE_DISK_SHADER_CACHE);
-
         SettingSection layoutSection = mSettings.getSection(Settings.SECTION_LAYOUT);
         Setting cardboardScreenSize = layoutSection.getSetting(SettingsFile.KEY_CARDBOARD_SCREEN_SIZE);
         Setting cardboardXShift = layoutSection.getSetting(SettingsFile.KEY_CARDBOARD_X_SHIFT);
         Setting cardboardYShift = layoutSection.getSetting(SettingsFile.KEY_CARDBOARD_Y_SHIFT);
+        SettingSection utilitySection = mSettings.getSection(Settings.SECTION_UTILITY);
+        Setting dumpTextures = utilitySection.getSetting(SettingsFile.KEY_DUMP_TEXTURES);
+        Setting customTextures = utilitySection.getSetting(SettingsFile.KEY_CUSTOM_TEXTURES);
+        //Setting preloadTextures = utilitySection.getSetting(SettingsFile.KEY_PRELOAD_TEXTURES);
 
         sl.add(new HeaderSetting(null, null, R.string.renderer, 0));
         sl.add(new SliderSetting(SettingsFile.KEY_RESOLUTION_FACTOR, Settings.SECTION_RENDERER, R.string.internal_resolution, R.string.internal_resolution_description, 1, 4, "x", 1, resolutionFactor));
@@ -377,6 +384,12 @@ public final class SettingsFragmentPresenter {
         sl.add(new SliderSetting(SettingsFile.KEY_CARDBOARD_SCREEN_SIZE, Settings.SECTION_LAYOUT, R.string.cardboard_screen_size, R.string.cardboard_screen_size_description, 30, 100, "%", 85, cardboardScreenSize));
         sl.add(new SliderSetting(SettingsFile.KEY_CARDBOARD_X_SHIFT, Settings.SECTION_LAYOUT, R.string.cardboard_x_shift, R.string.cardboard_x_shift_description, -100, 100, "%", 0, cardboardXShift));
         sl.add(new SliderSetting(SettingsFile.KEY_CARDBOARD_Y_SHIFT, Settings.SECTION_LAYOUT, R.string.cardboard_y_shift, R.string.cardboard_y_shift_description, -100, 100, "%", 0, cardboardYShift));
+
+        sl.add(new HeaderSetting(null, null, R.string.utility, 0));
+        sl.add(new CheckBoxSetting(SettingsFile.KEY_DUMP_TEXTURES, Settings.SECTION_UTILITY, R.string.dump_textures, R.string.dump_textures_description, false, dumpTextures));
+        sl.add(new CheckBoxSetting(SettingsFile.KEY_CUSTOM_TEXTURES, Settings.SECTION_UTILITY, R.string.custom_textures, R.string.custom_textures_description, false, customTextures));
+        //Disabled until custom texture implementation gets rewrite, current one overloads RAM and crashes Citra.
+        //sl.add(new CheckBoxSetting(SettingsFile.KEY_PRELOAD_TEXTURES, Settings.SECTION_UTILITY, R.string.preload_textures, R.string.preload_textures_description, false, preloadTextures));
     }
 
     private void addAudioSettings(ArrayList<SettingsItem> sl) {
